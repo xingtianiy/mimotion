@@ -177,16 +177,15 @@ class MiMotionRunner:
     # 主函数
     def login_and_post_step(self, min_step, max_step):
         if self.invalid:
-            return "账号或密码配置有误", False, None, "账号或密码配置有误"
+            return "账号或密码配置有误", False
         app_token = self.login()
         if app_token is None:
-            return "登陆失败！", False, None, "登录失败"
+            return "登陆失败！", False
 
         step = str(random.randint(min_step, max_step))
         self.log_str += f"已设置为随机步数范围({min_step}~{max_step}) 随机值:{step}\n"
         ok, msg = zeppHelper.post_fake_brand_data(step, app_token, self.user_id)
-        reason = None if ok else (msg or "未知错误")
-        return f"修改步数（{step}）[{msg}]", ok, step, reason
+        return f"修改步数（{step}）[" + msg + "]", ok
 
 
 def run_single_account(total, idx, user_mi, passwd_mi):
@@ -196,26 +195,16 @@ def run_single_account(total, idx, user_mi, passwd_mi):
     log_str = f"[{format_now()}]\n{idx_info}账号：{desensitize_user_name(user_mi)}\n"
     try:
         runner = MiMotionRunner(user_mi, passwd_mi)
-        exec_msg, success, step, reason = runner.login_and_post_step(min_step, max_step)
+        exec_msg, success = runner.login_and_post_step(min_step, max_step)
         log_str += runner.log_str
         log_str += f'{exec_msg}\n'
-        if not success and not reason:
-            reason = exec_msg
-        exec_result = {"user": user_mi,
-                       "user_display": desensitize_user_name(user_mi),
-                       "success": success,
-                       "msg": exec_msg,
-                       "step": step,
-                       "reason": reason}
+        exec_result = {"user": user_mi, "success": success,
+                       "msg": exec_msg}
     except:
         log_str += f"执行异常:{traceback.format_exc()}\n"
         log_str += traceback.format_exc()
-        exec_result = {"user": user_mi,
-                       "user_display": desensitize_user_name(user_mi),
-                       "success": False,
-                       "msg": f"执行异常:{traceback.format_exc()}",
-                       "step": None,
-                       "reason": f"执行异常:{traceback.format_exc()}"}
+        exec_result = {"user": user_mi, "success": False,
+                       "msg": f"执行异常:{traceback.format_exc()}"}
     print(log_str)
     return exec_result
 
@@ -246,8 +235,7 @@ def execute():
             push_results.append(result)
             if result['success'] is True:
                 success_count += 1
-        success_rate = success_count / total * 100 if total else 0
-        summary = f"\n执行账号总数{total}，成功率：{success_rate:.1f}%，成功：{success_count}，失败：{total - success_count}"
+        summary = f"\n执行账号总数{total}，成功：{success_count}，失败：{total - success_count}"
         print(summary)
         push_util.push_results(push_results, summary, push_config)
     else:
