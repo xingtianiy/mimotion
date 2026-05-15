@@ -154,6 +154,29 @@ def build_text_summary(summary, exec_results, max_detail):
     return content
 
 
+def build_telegram_summary(summary, exec_results, max_detail):
+    content = f'<b>{html_escape(summary)}</b>\n'
+    content += '━━━━━━━━━━━━━━\n'
+    if len(exec_results) >= max_detail:
+        content += '<i>账号数量过多，详细情况请前往github actions中查看</i>'
+        return content
+
+    for exec_result in exec_results:
+        user_display = html_escape(exec_result.get('user_display') or exec_result.get('user'))
+        step = html_escape(exec_result.get('step') or '-')
+        success_text = '成功' if exec_result.get('success') else '失败'
+        status = success_text
+        if exec_result.get('success') is not True:
+            reason = exec_result.get('reason') or exec_result.get('msg') or '未知原因'
+            status = f'{success_text} + {html_escape(reason)}'
+        
+        content += f'账号：{user_display}\n'
+        content += f'步数：{step}\n'
+        content += f'状态：{status}\n'
+        content += '━━━━━━━━━━━━━━\n'
+    return content
+
+
 def push_telegram_bot(bot_token, chat_id, content):
     """
     推送消息类型为html 需要在外部组装html content
@@ -275,7 +298,7 @@ def push_to_telegram_bot(exec_results, summary, config: PushConfig):
     # 判断是否需要telegram推送
     if (config.telegram_bot_token and config.telegram_bot_token != '' and config.telegram_bot_token != 'NO' and
             config.telegram_chat_id and config.telegram_chat_id != ''):
-        html = build_html_summary(summary, exec_results, config.push_plus_max)
-        push_telegram_bot(config.telegram_bot_token, config.telegram_chat_id, html)
+        content = build_telegram_summary(summary, exec_results, config.push_plus_max)
+        push_telegram_bot(config.telegram_bot_token, config.telegram_chat_id, content)
     else:
         print("未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID 跳过telegram推送")
