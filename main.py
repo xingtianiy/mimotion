@@ -185,8 +185,7 @@ class MiMotionRunner:
         step = str(random.randint(min_step, max_step))
         self.log_str += f"已设置为随机步数范围({min_step}~{max_step}) 随机值:{step}\n"
         ok, msg = zeppHelper.post_fake_brand_data(step, app_token, self.user_id)
-        return f"修改步数（{step}）[" + msg + "]", ok
-
+        return {"step": step,"msg": f"修改步数（{step}）[{msg}]","success": ok}
 
 def run_single_account(total, idx, user_mi, passwd_mi):
     idx_info = ""
@@ -195,11 +194,16 @@ def run_single_account(total, idx, user_mi, passwd_mi):
     log_str = f"[{format_now()}]\n{idx_info}账号：{desensitize_user_name(user_mi)}\n"
     try:
         runner = MiMotionRunner(user_mi, passwd_mi)
-        exec_msg, success = runner.login_and_post_step(min_step, max_step)
+        result = runner.login_and_post_step(min_step, max_step)
         log_str += runner.log_str
-        log_str += f'{exec_msg}\n'
-        exec_result = {"user": user_mi, "success": success,
-                       "msg": exec_msg}
+        log_str += f"{result['msg']}\n"
+        exec_result = {
+            "user": user_mi,
+            "user_display": desensitize_user_name(user_mi),
+            "success": result["success"],
+            "msg": result["msg"],
+            "step": result["step"]
+        }
     except:
         log_str += f"执行异常:{traceback.format_exc()}\n"
         log_str += traceback.format_exc()
