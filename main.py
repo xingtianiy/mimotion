@@ -185,7 +185,7 @@ class MiMotionRunner:
         step = str(random.randint(min_step, max_step))
         self.log_str += f"已设置为随机步数范围({min_step}~{max_step}) 随机值:{step}\n"
         ok, msg = zeppHelper.post_fake_brand_data(step, app_token, self.user_id)
-        return {"step": step,"msg": msg,"success": ok}
+        return f"修改步数（{step}）[" + msg + "]", ok
 
 
 def run_single_account(total, idx, user_mi, passwd_mi):
@@ -198,12 +198,8 @@ def run_single_account(total, idx, user_mi, passwd_mi):
         exec_msg, success = runner.login_and_post_step(min_step, max_step)
         log_str += runner.log_str
         log_str += f'{exec_msg}\n'
-        exec_result = {
-            "user": user_mi,
-            "success": success,
-            "msg": exec_msg,
-            "step": step if success else 0
-        }
+        exec_result = {"user": user_mi, "success": success,
+                       "msg": exec_msg}
     except:
         log_str += f"执行异常:{traceback.format_exc()}\n"
         log_str += traceback.format_exc()
