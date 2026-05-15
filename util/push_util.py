@@ -1,4 +1,5 @@
 import json
+import html
 
 import requests
 from datetime import datetime
@@ -102,6 +103,57 @@ def buildWeChatContent(title, content) -> str:
     return f"""# {title}\n{content}"""
 
 
+def html_escape(text):
+    if text is None:
+        return ''
+    return html.escape(str(text), quote=False)
+
+
+def build_html_summary(summary, exec_results, max_detail):
+    content = f'<b>{html_escape(summary)}</b><br>'
+    content += '━━━━━━━━━━━━━━<br>'
+    if len(exec_results) >= max_detail:
+        content += '<i>账号数量过多，详细情况请前往github actions中查看</i>'
+        return content
+
+    for exec_result in exec_results:
+        user_display = html_escape(exec_result.get('user_display') or exec_result.get('user'))
+        step = html_escape(exec_result.get('step') or '-')
+        success_text = '成功' if exec_result.get('success') else '失败'
+        status = success_text
+        if exec_result.get('success') is not True:
+            reason = exec_result.get('reason') or exec_result.get('msg') or '未知原因'
+            status = f'{success_text} + {html_escape(reason)}'
+        
+        content += f'账号：{user_display}<br>'
+        content += f'步数：{step}<br>'
+        content += f'状态：{status}<br>'
+        content += '━━━━━━━━━━━━━━<br>'
+    return content
+
+
+def build_text_summary(summary, exec_results, max_detail):
+    content = f'{summary}\n━━━━━━━━━━━━━━'
+    if len(exec_results) >= max_detail:
+        content += '\n账号数量过多，详细情况请前往github actions中查看'
+        return content
+
+    for exec_result in exec_results:
+        user_display = exec_result.get('user_display') or exec_result.get('user')
+        step = exec_result.get('step') or '-'
+        success_text = '成功' if exec_result.get('success') else '失败'
+        status = success_text
+        if exec_result.get('success') is not True:
+            reason = exec_result.get('reason') or exec_result.get('msg') or '未知原因'
+            status = f'{success_text} + {reason}'
+        
+        content += f'\n账号：{user_display}'
+        content += f'\n步数：{step}'
+        content += f'\n状态：{status}'
+        content += '\n━━━━━━━━━━━━━━'
+    return content
+
+
 def push_telegram_bot(bot_token, chat_id, content):
     """
     推送消息类型为html 需要在外部组装html content
@@ -115,7 +167,8 @@ def push_telegram_bot(bot_token, chat_id, content):
     payload = {
         "chat_id": int(chat_id),
         "text": content,
-        "parse_mode": "HTML"
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
     }
     print(f"post to url: {requestUrl}")
     print(f"payload: {json.dumps(payload)}")
@@ -126,9 +179,10 @@ def push_telegram_bot(bot_token, chat_id, content):
             if json_res.get('ok') is True:
                 print(f"telegram bot推送完毕：{json_res['result']['message_id']}")
             else:
-                print(f"telegram bot推送失败: {json.dumps(json_res)}")
+                print(f"telegram bot推送失败: {json.dumps(json_res, ensure_ascii=False)}")
         else:
-            print(f"telegram bot推送失败: {response.status_code}")
+            text = response.text
+            print(f"telegram bot推送失败: {response.status_code} {text}")
     except requests.exceptions.RequestException as e:
         print(f"telegram bot推送异常: {e}")
     except Exception as e:
@@ -184,18 +238,7 @@ def push_to_push_plus(exec_results, summary, config: PushConfig):
     """推送到PushPlus"""
     # 判断是否需要pushplus推送
     if config.push_plus_token and config.push_plus_token != '' and config.push_plus_token != 'NO':
-        html = f'<div>{summary}</div>'
-        if len(exec_results) >= config.push_plus_max:
-            html += '<div>账号数量过多，详细情况请前往github actions中查看</div>'
-        else:
-            html += '<ul>'
-            for exec_result in exec_results:
-                success = exec_result['success']
-                if success is not None and success is True:
-                    html += f'<li><span>账号：{exec_result["user"]}</span>刷步数成功，接口返回：{exec_result["msg"]}</li>'
-                else:
-                    html += f'<li><span>账号：{exec_result["user"]}</span>刷步数失败，失败原因：{exec_result["msg"]}</li>'
-            html += '</ul>'
+        html = build_html_summary(summary, exec_results, config.push_plus_max)
         push_plus(config.push_plus_token, f"{format_now()} 刷步数通知", html)
     else:
         print("未配置 PUSH_PLUS_TOKEN 跳过PUSHPLUS推送")
@@ -206,16 +249,22 @@ def push_to_wechat_webhook(exec_results, summary, config: PushConfig):
     # 判断是否需要微信推送
     if config.push_wechat_webhook_key and config.push_wechat_webhook_key != '' and config.push_wechat_webhook_key != 'NO':
 
-        content = f'## {summary}'
+        content = f'{summary}\n━━━━━━━━━━━━━━'
         if len(exec_results) >= config.push_plus_max:
-            content += '\n- 账号数量过多，详细情况请前往github actions中查看'
+            content += '\n账号数量过多，详细情况请前往github actions中查看'
         else:
             for exec_result in exec_results:
-                success = exec_result['success']
-                if success is not None and success is True:
-                    content += f'\n- 账号：{exec_result["user"]}刷步数成功，接口返回：{exec_result["msg"]}'
-                else:
-                    content += f'\n- 账号：{exec_result["user"]}刷步数失败，失败原因：{exec_result["msg"]}'
+                user_display = exec_result.get('user_display') or exec_result.get('user')
+                step = exec_result.get('step') or '-'
+                success_text = '成功' if exec_result.get('success') else '失败'
+                status = success_text
+                if exec_result.get('success') is not True:
+                    reason = exec_result.get('reason') or exec_result.get('msg') or '未知原因'
+                    status = f'{success_text} + {reason}'
+                content += f'\n账号：{user_display}'
+                content += f'\n步数：{step}'
+                content += f'\n状态：{status}'
+                content += '\n━━━━━━━━━━━━━━'
         push_wechat_webhook(config.push_wechat_webhook_key, f"{format_now()} 刷步数通知", content)
     else:
         print("未配置 WECHAT_WEBHOOK_KEY 跳过微信推送")
@@ -226,16 +275,7 @@ def push_to_telegram_bot(exec_results, summary, config: PushConfig):
     # 判断是否需要telegram推送
     if (config.telegram_bot_token and config.telegram_bot_token != '' and config.telegram_bot_token != 'NO' and
             config.telegram_chat_id and config.telegram_chat_id != ''):
-        html = f'<b>{summary}</b>'
-        if len(exec_results) >= config.push_plus_max:
-            html += '<blockquote>账号数量过多，详细情况请前往github actions中查看</blockquote>'
-        else:
-            for exec_result in exec_results:
-                success = exec_result['success']
-                if success is not None and success is True:
-                    html += f'<pre><blockquote>账号：{exec_result["user"]}</blockquote>刷步数成功，接口返回：<b>{exec_result["msg"]}</b></pre>'
-                else:
-                    html += f'<pre><blockquote>账号：{exec_result["user"]}</blockquote>刷步数失败，失败原因：<b>{exec_result["msg"]}</b></pre>'
+        html = build_html_summary(summary, exec_results, config.push_plus_max)
         push_telegram_bot(config.telegram_bot_token, config.telegram_chat_id, html)
     else:
         print("未配置 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID 跳过telegram推送")
