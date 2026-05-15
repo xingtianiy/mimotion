@@ -117,7 +117,10 @@ def build_html_summary(summary, exec_results, max_detail):
         return content
 
     for exec_result in exec_results:
-        user_display = html_escape(exec_result.get('user_display') or exec_result.get('user'))
+        user_display = html_escape(
+            (exec_result.get('user_display') or exec_result.get('user'))
+            .replace("@", "&#64;")
+        )
         step = html_escape(exec_result.get('step') or '-')
         success_text = '成功' if exec_result.get('success') else '失败'
         status = success_text
